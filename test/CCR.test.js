@@ -30,17 +30,17 @@ contract('CCR', function (accounts) {
   })
 
   it("admin can mint token to user1", async () => {
-    await instance.mintByAdmin(user1, { from: contractOwner, value: mintZero });
+    await instance.mintByAdmin([user1], { from: contractOwner, value: mintZero });
     const balance = await instance.balanceOf(user1);
     assert.equal(balance.toString(), '1', "mint token to user1 failed");
   })
 
   it("user can not mint token to other user", async () => {
-    await catchRevert(instance.mintByAdmin(user1, { from: user1, value: mintSpend }))
+    await catchRevert(instance.mintByAdmin([user1], { from: user1, value: mintSpend }))
   })
 
   it("Can get tokenURI minted NFT", async () => {
-    await instance.mintByAdmin(user1, { from: contractOwner, value: mintZero });
+    await instance.mintByAdmin([user1], { from: contractOwner, value: mintZero });
     const token0 = await instance.tokenURI(0)
     assert.equal(
       token0.toString(), baseURL + '0', "cannot read token url"
@@ -120,8 +120,26 @@ contract('CCR', function (accounts) {
   it("Can read remain supply", async () => {
     const remainSupplyBeforeMint = await instance.getRemainingSupply();
     assert.equal(remainSupplyBeforeMint.toString(), '500', "remain supply is not correct");
-    await instance.mintByAdmin(user1, { from: contractOwner, value: mintZero });
+    await instance.mintByAdmin([user1], { from: contractOwner, value: mintZero });
     const remainSupplyAfterMint = await instance.getRemainingSupply();
     assert.equal(remainSupplyAfterMint.toString(), '499', "remain supply is not correct");
+  })
+
+  it("User in whitelist can only mint 2 times", async () => {
+    await instance.addToWhitelist([user1], { from: contractOwner });
+    await instance.mint({ from: user1, value: mintZero });
+    await instance.mint({ from: user1, value: mintSpend });
+    await catchRevert(instance.mint({ from: user1, value: mintSpend }));
+    assert.equal(await instance.balanceOf(user1), '2', "user should has 2 NFTs");
+  })
+
+  it("User in whitelist second NFT should pay", async () => {
+    await instance.addToWhitelist([user1], { from: contractOwner });
+    await instance.mint({ from: user1, value: mintZero });
+    assert.equal(await instance.getMintedCount(user1), '1', "user should have minted 1 NFT");
+    await catchRevert(instance.mint({ from: user1, value: mintZero }));
+    await instance.mint({ from: user1, value: mintSpend });
+    assert.equal(await instance.getMintedCount(user1), '2', "user should have minted 2 NFTs");
+    assert.equal(await instance.balanceOf(user1), '2', "user should has 2 NFTs");
   })
 });

@@ -18,6 +18,7 @@ contract CCR is AccessControlEnumerable, ERC721Enumerable {
     uint256 public maxSupply;
     address payable private fundAddress;
     mapping (address => bool) public whitelist;
+    mapping (address => uint) public minted;
 
     constructor() ERC721("Crypto Chasers Robot", "CCR"){
       maxSupply = 500;
@@ -43,10 +44,17 @@ contract CCR is AccessControlEnumerable, ERC721Enumerable {
       return _baseTokenURI;
     }
 
+    function _mintProxy(address to) internal {
+      _mint(to, _tokenIdTracker.current());
+      _tokenIdTracker.increment();
+      minted[to] += 1;
+    }
+
     // admin can direct mint NFT to any address
-    function mintByAdmin(address to) onlyAdmin public {
-        _mint(to, _tokenIdTracker.current());
-        _tokenIdTracker.increment();
+    function mintByAdmin(address[] calldata recievers) onlyAdmin public {
+      for (uint i = 0; i < recievers.length; i++) {
+        _mintProxy(recievers[i]);
+      }
     }
 
     // Users will have to spend ETH to mint NFT
@@ -54,21 +62,26 @@ contract CCR is AccessControlEnumerable, ERC721Enumerable {
     // should set a blockheight, before height should verify if in whitelist, 
     // after it any address can mint freely
     function mint() public payable {
-      require(balanceOf(msg.sender) <= 2, "Max mint 2 per sender");
+      require(minted[msg.sender] < 2, "Max mint 2 per sender");
       require(maxSupply >= totalSupply(), "Max supply reached");
 
-      if(whitelist[msg.sender]){
+      if(whitelist[msg.sender]) {
         require(hasRole(MINTER_ROLE, _msgSender()), "must have minter role to mint");
-        _mint(msg.sender, _tokenIdTracker.current());
-        _tokenIdTracker.increment();
-      }else{
+        if(minted[msg.sender] == 0){
+          _mintProxy(msg.sender); 
+        }else{
+          require(msg.value == 0.04 ether, "Need to send 0.04 ether");
+          if(fundAddress.send(msg.value)){
+            _mintProxy(msg.sender);
+          }
+        }
+      }
+      else{
         require(block.timestamp >= whitelistEndDate, "only in whitelist can mint now");
         require(msg.value == 0.04 ether, "Need to send 0.04 ether");
-
         // send 0.04 ether to the contract fundAddress
         if(fundAddress.send(msg.value)){
-          _mint(msg.sender, _tokenIdTracker.current());
-          _tokenIdTracker.increment();
+          _mintProxy(msg.sender);
         }
       }
     }
@@ -104,6 +117,11 @@ contract CCR is AccessControlEnumerable, ERC721Enumerable {
     // get remaining supply
     function getRemainingSupply() public view returns (uint256) {
       return maxSupply - totalSupply();
+    }
+
+    // get minted count
+    function getMintedCount(address _address) public view returns (uint256) {
+      return minted[_address];
     }
 
     /**
