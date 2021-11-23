@@ -52,6 +52,7 @@ contract CCR is AccessControlEnumerable, ERC721Enumerable {
 
     // admin can direct mint NFT to any address
     function mintByAdmin(address[] calldata recievers) onlyAdmin public {
+      require(maxSupply >= totalSupply() + recievers.length, "Max supply reached");
       for (uint i = 0; i < recievers.length; i++) {
         _mintProxy(recievers[i]);
       }
