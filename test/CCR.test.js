@@ -9,20 +9,12 @@ contract('CCR', function (accounts) {
   const baseURL = "ipfs://QmdGmRN4rU5nttWe1ozvzJ4txUa1yXWn89QeWuzuoTwkTB/"
 
   beforeEach(async () => {
-    instance = await CCR.new();
+    instance = await CCR.new(baseURL);
   });
 
   it("ready to be solved!", async () => {
     const eth100 = 100e18;
     assert.equal(await web3.eth.getBalance(user1), eth100.toString());
-  });
-
-  it("is fundAddress contractOwner", async () => {
-    assert.equal(
-      await instance.getFundAddress.call(),
-      contractOwner,
-      "fundAddress is not correct",
-    );
   });
 
   it("Can get tokenURI not exist", async () => {
@@ -51,31 +43,6 @@ contract('CCR', function (accounts) {
     await catchRevert(instance.mint({ from: user1, value: mintSpend }));
   })
 
-  it("default whitelistEndDate is current add 1 day", async () => {
-    const whitelistEndDate = await instance.whitelistEndDate.call();
-    assert.equal(
-      whitelistEndDate.toString() * 1000 < Date.now() + 1000 * 60 * 60 * 24
-      && whitelistEndDate.toString() * 1000 > Date.now(),
-      true,
-      "default whitelistEndDate is not set correctly");
-  })
-
-  it("admin can set setwhitelistEndDate", async () => {
-    const oldWhitelistEndDate = await instance.whitelistEndDate.call();
-    const newWhitelistEndDate = oldWhitelistEndDate + 60;
-    await instance.setwhitelistEndDate(newWhitelistEndDate, { from: contractOwner }); // 1 minutes later
-    const whitelistEndDate = await instance.whitelistEndDate.call();
-    assert.equal(
-      whitelistEndDate.toString() === newWhitelistEndDate,
-      true,
-      "whitelistEndDate is not set correctly");
-  })
-
-  it("user can not set whitelistEndDate", async () => {
-    const oldWhitelistEndDate = await instance.whitelistEndDate.call();
-    await catchRevert(instance.setwhitelistEndDate(oldWhitelistEndDate + 60, { from: user1 }));
-  })
-
   it("admin can add addresses to whitelist", async () => {
     await instance.addToWhitelist([user1, user2, user3], { from: contractOwner });
     const user1IsInWhitelist = await instance.isInWhitelist(user1);
@@ -99,22 +66,33 @@ contract('CCR', function (accounts) {
   })
 
   it("after whitelistEndBlockDate, anyone can mint by spend ethers", async () => {
-    const balanceAdmin = await web3.eth.getBalance(contractOwner);
-    const balanceUser4 = await web3.eth.getBalance(user4);
+    const balanceUser = await web3.eth.getBalance(user4);
+    const AdminBalanceBeforeMint = await web3.eth.getBalance(contractOwner);
+    const contractBalanceBeforeMint = await web3.eth.getBalance(instance.address);
+    assert.equal(contractBalanceBeforeMint == 0, true, "contract have no balance");
 
+    // change whitelist and mint
     const startDate = (await web3.eth.getBlock()).timestamp
     await catchRevert(instance.mint({ from: user4, value: mintSpend }));
     const newWhitelistEndDate = startDate - 1;
     await instance.setwhitelistEndDate(newWhitelistEndDate, { from: contractOwner });
     await instance.mint({ from: user4, value: mintSpend });
+
     // check balance
-    const balanceAdminAfterMint = await web3.eth.getBalance(contractOwner);
-    const balanceUser4AfterMint = await web3.eth.getBalance(user4);
-    const adminEtherDifference = web3.utils.fromWei((balanceAdminAfterMint - balanceAdmin).toString(), 'ether')
-    const userEtherDifference = web3.utils.fromWei((balanceUser4AfterMint - balanceUser4).toString(), 'ether')
-    console.log('difference', userEtherDifference - spendEther)
-    assert.equal(Math.abs(adminEtherDifference - spendEther) < 0.1, true, "admin ether recieve is not correct");
-    assert.equal(Math.abs(userEtherDifference - spendEther) < 0.1, true, "user ether spend is not correct");
+    const balanceUserAfterMint = await web3.eth.getBalance(user4);
+    const contractBalanceAfterMint = await web3.eth.getBalance(instance.address);
+    const userEtherDifference = balanceUserAfterMint - balanceUser // -0.04+ ether
+    assert.equal(Math.abs(userEtherDifference) - mintSpend < 1e16, true, "user ether spend is not correct");
+    assert.equal(contractBalanceAfterMint == 4e16, true, "contract have no recieve ether");
+
+    // withdraw contract balance
+    await instance.withdrawAll({ from: contractOwner });
+    const AdminBalanceAfterMint = await web3.eth.getBalance(contractOwner);
+    assert.equal(
+      Number(AdminBalanceAfterMint) > Number(AdminBalanceBeforeMint) && Math.abs(AdminBalanceAfterMint - AdminBalanceBeforeMint - 4e16) < 1e16,
+      true,
+      "admin withdraw is not correct"
+    );
   })
 
   it("Can read remain supply", async () => {

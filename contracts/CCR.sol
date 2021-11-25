@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.3;
+pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
@@ -12,19 +12,23 @@ contract CCR is AccessControlEnumerable, ERC721Enumerable {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIdTracker;
 
+    uint public constant MINT_PRICE = 0.04 ether;
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
+    uint public constant _DEC_1_2021_16_00_00 = 1_638_345_600;
+
     string private _baseTokenURI;
-    uint256 public whitelistEndDate;
-    uint256 public maxSupply;
-    address payable private fundAddress;
+
+    uint256 public _whitelistEndDate;
+    uint256 public _maxSupply;
+    address private _fundAddress;
     mapping (address => bool) public whitelist;
     mapping (address => uint) public minted;
 
-    constructor() ERC721("Crypto Chasers Robot", "CCR"){
-      maxSupply = 500;
-      fundAddress = payable(msg.sender);
-      whitelistEndDate = block.timestamp + 1 days;
-      _baseTokenURI = "ipfs://QmdGmRN4rU5nttWe1ozvzJ4txUa1yXWn89QeWuzuoTwkTB/";
+    constructor(string memory baseTokenURI) ERC721("Crypto Chasers Robot", "CCR"){
+      _maxSupply = 500;
+      _fundAddress = msg.sender;
+      _baseTokenURI = baseTokenURI;
+      _whitelistEndDate = _DEC_1_2021_16_00_00;
       _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
       _setupRole(MINTER_ROLE, _msgSender());
     }
@@ -51,8 +55,8 @@ contract CCR is AccessControlEnumerable, ERC721Enumerable {
     }
 
     // admin can direct mint NFT to any address
-    function mintByAdmin(address[] calldata recievers) onlyAdmin public {
-      require(maxSupply >= totalSupply() + recievers.length, "Max supply reached");
+    function mintByAdmin(address[] calldata recievers) onlyAdmin external {
+      require(_maxSupply >= totalSupply() + recievers.length, "Max supply reached");
       for (uint i = 0; i < recievers.length; i++) {
         _mintProxy(recievers[i]);
       }
@@ -62,43 +66,38 @@ contract CCR is AccessControlEnumerable, ERC721Enumerable {
     // max mint 2 per sender
     // should set a blockheight, before height should verify if in whitelist, 
     // after it any address can mint freely
-    function mint() public payable {
+    function mint() external payable {
       require(minted[msg.sender] < 2, "Max mint 2 per sender");
-      require(maxSupply >= totalSupply(), "Max supply reached");
+      require(_maxSupply >= totalSupply(), "Max supply reached");
 
       if(whitelist[msg.sender]) {
         require(hasRole(MINTER_ROLE, _msgSender()), "must have minter role to mint");
         if(minted[msg.sender] == 0){
           _mintProxy(msg.sender); 
         }else{
-          require(msg.value == 0.04 ether, "Need to send 0.04 ether");
-          if(fundAddress.send(msg.value)){
-            _mintProxy(msg.sender);
-          }
-        }
-      }
-      else{
-        require(block.timestamp >= whitelistEndDate, "only in whitelist can mint now");
-        require(msg.value == 0.04 ether, "Need to send 0.04 ether");
-        // send 0.04 ether to the contract fundAddress
-        if(fundAddress.send(msg.value)){
+          require(msg.value == MINT_PRICE, "Need to send 0.04 ether");
           _mintProxy(msg.sender);
         }
       }
+      else{
+        require(block.timestamp >= _whitelistEndDate, "only in whitelist can mint now");
+        require(msg.value == MINT_PRICE, "Need to send 0.04 ether");
+        _mintProxy(msg.sender);
+      }
+    }
+    // admin can set whitelistEndDate
+    function setwhitelistEndDate(uint256 whitelistEndDate) onlyAdmin external {
+      _whitelistEndDate = whitelistEndDate;
     }
 
-    // admin can set whitelistEndDate
-    function setwhitelistEndDate(uint256 _whitelistEndDate) onlyAdmin public {
-      whitelistEndDate = _whitelistEndDate;
-    }
 
     // admin can set maxSupply
-    function setMaxSupply(uint256 _maxSupply) onlyAdmin public {
-      maxSupply = _maxSupply;
+    function setMaxSupply(uint256 maxSupply) onlyAdmin external {
+      _maxSupply = maxSupply;
     }
 
     // admin can set addresses array as MINTER_ROLE
-    function addToWhitelist(address[] memory _whiteListAddresses) onlyAdmin public {
+    function addToWhitelist(address[] memory _whiteListAddresses) onlyAdmin external {
       for (uint i = 0; i < _whiteListAddresses.length; i++) {
         whitelist[_whiteListAddresses[i]] = true;
         super.grantRole(MINTER_ROLE, _whiteListAddresses[i]);
@@ -106,23 +105,23 @@ contract CCR is AccessControlEnumerable, ERC721Enumerable {
     }
 
     // check if address is in whitelist
-    function isInWhitelist(address _address) public view returns (bool) {
+    function isInWhitelist(address _address) external view returns (bool) {
       return whitelist[_address];
     }
 
-    // get fund address
-    function getFundAddress() public view returns (address) {
-      return fundAddress;
-    }
-
     // get remaining supply
-    function getRemainingSupply() public view returns (uint256) {
-      return maxSupply - totalSupply();
+    function getRemainingSupply() external view returns (uint256) {
+      return _maxSupply - totalSupply();
     }
 
     // get minted count
-    function getMintedCount(address _address) public view returns (uint256) {
+    function getMintedCount(address _address) external view returns (uint256) {
       return minted[_address];
+    }
+
+    // withdraw ethers
+    function withdrawAll() external onlyAdmin {
+        payable(_fundAddress).transfer(address(this).balance);
     }
 
     /**
