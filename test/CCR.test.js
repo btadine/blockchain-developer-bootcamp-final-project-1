@@ -21,6 +21,15 @@ contract('CCR', function (accounts) {
     await catchRevert(instance.tokenURI(1))
   })
 
+  it("Admin can set baseTokenURI", async () => {
+    await instance.mintByAdmin([user1], { from: contractOwner, value: mintZero });
+    const oldURI = await instance.tokenURI(0)
+    assert.equal(oldURI, 'ipfs://QmdGmRN4rU5nttWe1ozvzJ4txUa1yXWn89QeWuzuoTwkTB/0', "tokenBaseURI not expect");
+    await instance.setBaseTokenURI("ipfs://QmVNNxtds7QCHzsM8Jps8Ksfd53Evy1zePCXW63h5wUc1Q/", { from: contractOwner, value: mintZero })
+    const newURI = await instance.tokenURI(0)
+    assert.equal(newURI, 'ipfs://QmVNNxtds7QCHzsM8Jps8Ksfd53Evy1zePCXW63h5wUc1Q/0', "admin not change tokenBaseURI");
+  })
+
   it("admin can mint token to user1", async () => {
     await instance.mintByAdmin([user1], { from: contractOwner, value: mintZero });
     const balance = await instance.balanceOf(user1);

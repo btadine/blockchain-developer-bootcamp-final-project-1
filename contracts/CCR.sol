@@ -24,7 +24,7 @@ contract CCR is AccessControlEnumerable, ERC721Enumerable {
     mapping (address => bool) public whitelist;
     mapping (address => uint) public minted;
 
-    constructor(string memory baseTokenURI) ERC721("Crypto Chasers Robot", "CCR"){
+    constructor(string memory baseTokenURI) ERC721("CryptoChasers Robot", "CCR"){
       _maxSupply = 500;
       _fundAddress = msg.sender;
       _baseTokenURI = baseTokenURI;
@@ -46,6 +46,11 @@ contract CCR is AccessControlEnumerable, ERC721Enumerable {
 
     function _baseURI() internal view virtual override returns (string memory) {
       return _baseTokenURI;
+    }
+
+    // admin can change baseTokenURI
+    function setBaseTokenURI(string memory baseTokenURI) onlyAdmin external{
+      _baseTokenURI = baseTokenURI;
     }
 
     function _mintProxy(address to) internal {
