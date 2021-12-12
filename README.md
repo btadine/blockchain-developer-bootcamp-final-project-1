@@ -2,6 +2,10 @@
 
 learning goals: prepare build a PFP NFT project to learn solidity
 
+## Public Ethereum account for NFT certificate
+
+0x49E53Fb3d5bf1532fEBAD88a1979E33A94844d1d
+
 ## about this project
 
 This is an avatar-based NFT project that I collaborated with a community artist for our community. The image compositing, contracts and front-end written by me.
